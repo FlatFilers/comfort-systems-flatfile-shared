@@ -1,5 +1,4 @@
 import { Anthropic } from "@anthropic-ai/sdk";
-import { CLAUDE_API_KEY } from "../../config";
 
 /**
  * Sends a prompt to the Anthropic API to generate a response.
@@ -8,8 +7,11 @@ import { CLAUDE_API_KEY } from "../../config";
  * @param {string} prompt - The prompt text.
  * @return A Promise that resolves with the generated response object, or null if an error occurred.
  */
-export async function sendPrompt(setup: string, prompt: string): Promise<Anthropic.Message | null> {
-  const anthropic = new Anthropic({ apiKey: CLAUDE_API_KEY });
+export async function sendPrompt(
+  setup: string,
+  prompt: string
+): Promise<Anthropic.Message | null> {
+  const anthropic = new Anthropic({ apiKey: process.env.CLAUDE_API_KEY });
 
   try {
     return anthropic.messages.create({

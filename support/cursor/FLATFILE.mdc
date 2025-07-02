@@ -1,0 +1,2290 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Flatfile Development Guide
+
+## Table of Contents
+- [Introduction](mdc:#introduction)
+- [Workbooks](mdc:#workbooks)
+- [Actions](mdc:#actions)
+- [Events](mdc:#events)
+- [Jobs](mdc:#jobs)
+- [Listeners](mdc:#listeners)
+- [Data Hooks](mdc:#data-hooks)
+- [Blueprint Overview](mdc:#blueprint-overview)
+- [Sheet Configuration](mdc:#sheet-configuration)
+- [Field Types](mdc:#field-types)
+- [Constraints and Validation](mdc:#constraints-and-validation)
+- [Relationships](mdc:#relationships)
+- [Best Practices](mdc:#best-practices)
+- [Examples](mdc:#examples)
+- [Space Configuration Plugin](mdc:#space-configuration-plugin)
+- [Job Handler Plugin](mdc:#job-handler-plugin)
+- [Flatfile API Package](mdc:#flatfile-api-package)
+- [External Validations](mdc:#external-validations)
+- [Running Demos](mdc:#running-demos)
+
+## Introduction
+
+Flatfile is a powerful data import platform that helps structure and validate data. This guide covers the key concepts and best practices for developing with Flatfile, specifically focusing on Blueprint configurations.
+
+## Workbooks
+
+### Overview
+
+Workbooks are analogous to a database, with a type-strict schema configuration. They replace traditional spreadsheet templates used for data collection during customer onboarding or file-based data exchange processes. Unlike spreadsheets, Workbooks enable real-time validation, correction, and data import with immediate feedback.
+
+#### Key Capabilities
+- Multi-format support beyond CSVs (with extensible file extractors)
+- Automatic validation based on predefined rules
+- User-friendly interface for data manipulation (add, remove, review, filter, correct)
+- Configurable primary Actions for data submission to APIs, databases, or workflows
+
+### Anatomy of a Workbook
+
+A Workbook is represented as an object within an array of workbooks:
+
+```typescript
+import { Flatfile } from "@flatfile/api";
+
+const workbook = {
+  name: "Data Import Workbook",
+  labels: ["pinned"],
+  sheets: [
+    // Array of Sheet configurations
+  ],
+  actions: [
+    // Array of Action configurations
+  ],
+  settings: {
+    trackChanges: true,
+    noMappingRedirect: false
+  }
+};
+
+// This workbook would be part of an array when configuring a space
+const workbooks = [workbook];
+```
+
+#### 1. Sheets Array
+Sheets are like database tables or spreadsheet sheets, each with its own schema:
+
+```typescript
+sheets: [
+  {
+    name: "Customers",
+    slug: "customers",
+    fields: [
+      // Field configurations
+    ]
+  },
+  {
+    name: "Orders",
+    slug: "orders",
+    fields: [
+      // Field configurations
+    ]
+  }
+]
+```
+
+#### 2. Actions Array
+Developer-defined operations that users can trigger on selected data:
+
+```typescript
+actions: [
+  {
+    id: "submit-to-api",
+    label: "Submit to API",
+    description: "Send validated data to external API",
+    primary: true,
+    async handler(context) {
+      // Action implementation
+    }
+  },
+  {
+    id: "download-pdf",
+    label: "Download as PDF",
+    description: "Export data as PDF report",
+    handler(context) {
+      // PDF generation logic
+    }
+  }
+]
+```
+
+#### 3. Settings Object
+Configuration options for Workbook behavior:
+
+```typescript
+settings: {
+  // Disable actions when commits are pending
+  trackChanges: true,
+  
+  // Prevent automatic redirect to mapping on file drop
+  noMappingRedirect: false,
+  
+  // Additional settings as needed
+}
+```
+
+#### 4. Labels Array
+Organizational and UI-related configurations:
+
+```typescript
+labels: [
+  "pinned",  // Makes workbook appear first in sidebar
+  "custom-label",  // Custom organizational labels
+]
+```
+
+### Example Workbook Configuration
+
+```typescript
+export const importWorkbook = {
+  name: "Product Import System",
+  labels: ["pinned"],
+  sheets: [
+    Products,  // Sheet configuration from separate file
+    Categories,  // Sheet configuration from separate file
+  ],
+  actions: [
+    {
+      id: "submit",
+      label: "Submit Data",
+      description: "Submit validated data to database",
+      primary: true,
+      async handler(context) {
+        const { data } = await context.getRecords();
+        // Process and submit data
+      }
+    }
+  ],
+  settings: {
+    trackChanges: true,
+    noMappingRedirect: false
+  }
+};
+
+// This workbook would be used as part of an array when configuring a space
+const workbooks = [importWorkbook];
+```
+
+### Best Practices for Workbooks
+
+1. **Organization**
+   - Group related sheets in a single workbook
+   - Use meaningful workbook names
+   - Implement appropriate actions for data processing
+
+2. **Configuration**
+   - Enable `trackChanges` for data integrity
+   - Configure `noMappingRedirect` based on UX requirements
+   - Use labels effectively for organization
+
+3. **Actions**
+   - Define clear primary actions
+   - Include helpful action descriptions
+   - Implement proper error handling
+   - Provide feedback during processing
+
+4. **Settings**
+   - Configure settings based on use case
+   - Document any custom settings
+   - Consider UX impact of settings
+
+## Actions
+
+Actions are code-based operations that run when triggered by user interaction in Flatfile. They can be mounted on Sheets, Workbooks, or files, providing a flexible way to implement custom functionality.
+
+### Types of Actions
+
+#### Built-in Actions
+Flatfile provides five default actions:
+- Mapping data between workbooks
+- Deleting data from a Workbook
+- Exporting (downloading) data
+- Find and Replace in a Sheet
+- Applying Mutate functions to Sheet data
+
+These actions create Jobs when triggered, which can be monitored and handled through event listeners.
+
+#### Developer-Created Actions
+Custom actions can be mounted at various levels:
+- Sheet level
+- Workbook level
+- File level
+
+When triggered, these actions create jobs with names following the pattern: `{domain}:{operation}` (e.g., `workbook:my-action`).
+
+### Action Configuration
+
+#### Required Parameters
+
+```typescript
+{
+  // Unique identifier used by the listener
+  operation: "submit-data",
+  
+  // UI display text
+  label: "Submit Data"
+}
+```
+
+#### Optional Parameters
+
+```typescript
+{
+  // Makes the action more prominent in UI
+  primary: true,
+  
+  // Shows confirmation modal
+  confirm: true,
+  
+  // Confirmation modal text
+  description: "Are you sure you want to submit this data?",
+  
+  // UI icon (default: lightning bolt)
+  icon: "upload",
+  
+  // Hover tooltip
+  tooltip: "Submit data to external API",
+  
+  // Tooltip messages for different states
+  messages: [
+    { type: "error", message: "Cannot submit invalid data" },
+    { type: "info", message: "Ready to submit" }
+  ],
+  
+  // Action constraints
+  constraints: [
+    { type: "hasAllValid" },    // Requires all records valid
+    { type: "hasSelection" },   // Requires selected records
+    { type: "hasData" }         // Requires data present
+  ],
+  
+  // Action execution mode
+  mode: "background"  // or "foreground" or "toolbarBlocking"
+}
+```
+
+### Input Forms
+
+Actions can request additional information from users through input forms:
+
+```typescript
+{
+  operation: "export-data",
+  label: "Export Data",
+  inputForm: {
+    type: "simple",
+    fields: [
+      {
+        key: "fileName",
+        label: "File Name",
+        type: "string",
+        description: "Name for the exported file",
+        defaultValue: "export",
+        constraints: [{ type: "required" }]
+      },
+      {
+        key: "format",
+        label: "Export Format",
+        type: "enum",
+        description: "Choose export format",
+        config: {
+          options: [
+            {
+              value: "csv",
+              label: "CSV",
+              description: "Comma-separated values"
+            },
+            {
+              value: "json",
+              label: "JSON",
+              description: "JavaScript Object Notation"
+            }
+          ]
+        },
+        constraints: [{ type: "required" }]
+      }
+    ]
+  }
+}
+```
+
+### Complete Action Example
+
+```typescript
+export const submitAction = {
+  operation: "submit-data",
+  label: "Submit Data",
+  primary: true,
+  confirm: true,
+  description: "Submit this data to the external API?",
+  icon: "upload",
+  tooltip: "Submit validated data",
+  constraints: [
+    { type: "hasAllValid" },
+    { type: "hasData" }
+  ],
+  mode: "foreground",
+  inputForm: {
+    type: "simple",
+    fields: [
+      {
+        key: "priority",
+        label: "Priority Level",
+        type: "enum",
+        description: "Set the processing priority",
+        defaultValue: "normal",
+        config: {
+          options: [
+            {
+              value: "high",
+              label: "High Priority",
+              description: "Process immediately"
+            },
+            {
+              value: "normal",
+              label: "Normal Priority",
+              description: "Process in order"
+            }
+          ]
+        },
+        constraints: [{ type: "required" }]
+      }
+    ]
+  }
+};
+
+// Using the action in a workbook
+export const workbook: {
+  name: "Data Import",
+  sheets: [...],
+  actions: [submitAction]
+};
+```
+
+### Best Practices for Actions
+
+1. **Naming and Organization**
+   - Use descriptive operation names
+   - Group related actions logically
+   - Consider action hierarchy (workbook vs sheet level)
+
+2. **User Experience**
+   - Provide clear labels and descriptions
+   - Use appropriate icons and tooltips
+   - Implement meaningful constraints
+
+3. **Input Forms**
+   - Request only necessary information
+   - Provide clear field descriptions
+   - Use appropriate field types
+   - Set sensible default values
+
+4. **Error Handling**
+   - Implement proper validation
+   - Provide clear error messages
+   - Handle edge cases gracefully
+
+5. **Performance**
+   - Use appropriate execution modes
+   - Consider background processing for long-running operations
+   - Implement progress indicators for lengthy tasks
+
+## Events
+
+### Overview
+
+Flatfile provides a comprehensive event system that allows you to respond to various activities within the platform. The platform offers both a REST API for direct resource manipulation and an Event bus for subscribing to resource-related notifications. The Flatfile PubSub Client serves as a lightweight wrapper around the API, making it easy to trigger API calls in response to Events.
+
+### Event Structure
+
+Events in Flatfile follow a standardized structure:
+
+```typescript
+interface FlatfileEvent {
+  domain: string;      // The domain of the event (e.g., 'workbook', 'sheet')
+  topic: string;       // The specific event type (e.g., 'workbook:created')
+  context: {
+    accountId: string;
+    environmentId: string;
+    spaceId?: string;
+    workbookId?: string;
+    actorId: string;
+    [key: string]: any;
+  };
+  payload?: any;       // Optional event-specific data
+}
+```
+
+### Using Events
+
+Events can be handled using the `@flatfile/listener` library:
+
+```typescript
+import { FlatfileListener } from '@flatfile/listener';
+
+const listener = new FlatfileListener();
+
+listener.on(
+  "job:ready",                    // Event topic
+  { job: "space:configure" },     // Event filter
+  async (event: FlatfileEvent) => {
+    // Handle the event
+    console.log('Job ready:', event);
+  }
+);
+```
+
+### Event Topics
+
+#### Workbook Events
+```typescript
+// Workbook created
+listener.on("workbook:created", async (event) => {
+  const { workbookId, spaceId } = event.context;
+  // Handle new workbook
+});
+
+// Workbook updated
+listener.on("workbook:updated", async (event) => {
+  // Triggered when workbook metadata changes
+});
+
+// Workbook deleted
+listener.on("workbook:deleted", async (event) => {
+  // Clean up after workbook deletion
+});
+
+// Workbook expired
+listener.on("workbook:expired", async (event) => {
+  // Handle workbook expiration
+});
+```
+
+#### Sheet Events
+```typescript
+// Sheet updated
+listener.on("sheet:updated", async (event) => {
+  const { sheetId, sheetSlug } = event.context;
+  // Handle sheet updates (e.g., validations)
+});
+
+// Sheet deleted
+listener.on("sheet:deleted", async (event) => {
+  // Handle sheet deletion
+});
+
+// Snapshot created
+listener.on("snapshot:created", async (event) => {
+  // Handle new sheet snapshot
+});
+```
+
+#### Record Events
+```typescript
+// Commit created
+listener.on("commit:created", async (event) => {
+  // Handle new record changes
+});
+
+// Commit completed
+listener.on("commit:completed", async (event) => {
+  // Handle completed record changes
+  // Only fires when trackChanges is enabled
+});
+
+// Layer created
+listener.on("layer:created", async (event) => {
+  // Handle new layer in a commit
+});
+```
+
+#### File Events
+```typescript
+// File created
+listener.on("file:created", async (event) => {
+  const { fileId } = event.context;
+  // Handle new file upload
+});
+
+// File updated
+listener.on("file:updated", async (event) => {
+  const { status, workbookId } = event.payload;
+  // Handle file extraction completion
+});
+
+// File deleted/expired
+listener.on("file:deleted", async (event) => {
+  // Clean up after file deletion
+});
+```
+
+#### Job Events
+```typescript
+// Job created
+listener.on("job:created", async (event) => {
+  const { job, status } = event.payload;
+  // Handle new job creation
+});
+
+// Job ready
+listener.on("job:ready", async (event) => {
+  // Handle job ready to execute
+});
+
+// Job completed
+listener.on("job:completed", async (event) => {
+  // Handle job completion
+});
+
+// Job failed
+listener.on("job:failed", async (event) => {
+  // Handle job failure
+});
+```
+
+#### Space Events
+```typescript
+// Space lifecycle events
+listener.on("space:created", async (event) => {
+  // Handle new space
+});
+
+listener.on("space:updated", async (event) => {
+  // Handle space updates
+});
+
+// Guest management
+listener.on("space:guestAdded", async (event) => {
+  // Handle new guest access
+});
+
+listener.on("space:guestRemoved", async (event) => {
+  // Handle guest removal
+});
+```
+
+### Best Practices for Event Handling
+
+1. **Error Handling**
+   ```typescript
+   listener.on("job:ready", async (event) => {
+     try {
+       // Handle event
+     } catch (error) {
+       console.error('Event handling failed:', error);
+       // Proper error reporting
+     }
+   });
+   ```
+
+2. **Event Filtering**
+   ```typescript
+   // Filter events by specific criteria
+   listener.on("commit:created", 
+     { sheet: "contacts" },  // Only handle events for "contacts" sheet
+     async (event) => {
+       // Handle filtered events
+     }
+   );
+   ```
+
+3. **Async Operations**
+   ```typescript
+   listener.on("workbook:created", async (event) => {
+     // Use async/await for asynchronous operations
+     await processWorkbook(event.context.workbookId);
+   });
+   ```
+
+4. **Context Utilization**
+   ```typescript
+   listener.on("sheet:updated", async (event) => {
+     const {
+       accountId,
+       environmentId,
+       spaceId,
+       workbookId,
+       sheetId,
+       sheetSlug
+     } = event.context;
+     
+     // Use context information for processing
+   });
+   ```
+
+5. **Event Chaining**
+   ```typescript
+   // Handle related events in sequence
+   listener.use(async (event, next) => {
+     if (event.topic === "file:created") {
+       // Pre-process file
+     }
+     await next();
+     // Post-process
+   });
+   ```
+
+## Jobs
+
+Jobs in Flatfile represent large units of work performed asynchronously on resources like files, Workbooks, or Sheets. They provide visibility into the status and progress of data processing operations.
+
+### Types of Jobs
+
+#### 1. Action Jobs
+Jobs attached to custom actions defined in workbooks or sheets.
+
+#### 2. Custom Jobs
+Jobs created dynamically in your listener for custom operations.
+
+#### 3. System Jobs
+Built-in Flatfile jobs like extraction, mapping, and AI Assist.
+
+### Action Based Jobs
+
+Example of creating an action that generates a job:
+
+```typescript
+// 1. Create an action in a workbook
+const workbook: {
+  name: "Data Import Workbook",
+  actions: [
+    {
+      label: "Export Data",
+      description: "Send data to destination system",
+      operation: "export",
+      type: "file"
+    }
+  ]
+};
+
+// 2. Listen for the job in your listener
+listener.on(
+  "job:ready",
+  { job: "workbook:export" },
+  async ({ context: { jobId } }) => {
+    try {
+      await api.jobs.ack(jobId, {
+        info: "Starting export...",
+        progress: 10
+      });
+
+      // Custom export logic here
+
+      await api.jobs.complete(jobId, {
+        outcome: {
+          message: "Export completed successfully"
+        }
+      });
+    } catch (error) {
+      await api.jobs.fail(jobId, {
+        outcome: {
+          message: "Export failed"
+        }
+      });
+    }
+  }
+);
+```
+
+### Custom Jobs
+
+Creating and handling custom jobs:
+
+```typescript
+// Create a custom job from an event
+listener.on(
+  "commit:created",
+  { sheet: "contacts" },
+  async ({ context: { workbookId } }) => {
+    const { data } = await api.jobs.create({
+      type: "workbook",
+      operation: "customOperation",
+      trigger: "immediate",
+      source: workbookId
+    });
+  }
+);
+
+// Handle the custom job
+listener.on(
+  "job:ready",
+  { job: "workbook:customOperation" },
+  async ({ context: { jobId } }) => {
+    try {
+      await api.jobs.ack(jobId, {
+        info: "Starting custom operation",
+        progress: 0
+      });
+
+      // Custom logic here
+
+      await api.jobs.complete(jobId, {
+        outcome: {
+          message: "Operation completed"
+        }
+      });
+    } catch (error) {
+      await api.jobs.fail(jobId);
+    }
+  }
+);
+```
+
+### System Jobs
+
+Common system jobs include:
+
+```typescript
+interface SystemJobs {
+  Extract: "Extracts data from specified source",
+  Map: "Maps data to Blueprint fields",
+  DeleteRecords: "Deletes records based on criteria",
+  Export: "Exports data to specified format",
+  MutateRecords: "Alters records according to rules",
+  Configure: "Modifies Space configuration",
+  AiAssist: "AI-powered data categorization",
+  FindReplace: "Search and replace operations"
+}
+```
+
+### Job Lifecycle
+
+Jobs emit events in the following order:
+
+1. `job:created` - Initial creation
+2. `job:ready` - Ready for execution
+3. `job:updated` - Progress updates
+4. `job:completed` or `job:failed` - Final status
+5. `job:outcome-acknowledged` - User acknowledgment
+
+### Job Configuration
+
+#### Required Parameters
+```typescript
+interface JobConfig {
+  // Required
+  type: "workbook" | "file" | "sheet" | "space";
+  operation: string;  // e.g., "export", "extract", "map"
+  source: string;     // Resource ID (workbookId, fileId, etc.)
+
+  // Optional
+  trigger?: "manual" | "immediate";
+  destination?: string;
+  status?: JobStatus;
+  progress?: number;
+  estimatedCompletionAt?: Date;
+  mode?: "foreground" | "background" | "toolbarBlocking";
+  metadata?: Record<string, any>;
+}
+
+type JobStatus = 
+  | "created"
+  | "planning"
+  | "scheduled"
+  | "ready"
+  | "executing"
+  | "complete"
+  | "failed"
+  | "cancelled";
+```
+
+### Working with Jobs
+
+#### 1. Acknowledging Jobs
+```typescript
+await api.jobs.ack(jobId, {
+  info: "Starting process...",
+  progress: 0
+});
+```
+
+#### 2. Updating Progress
+```typescript
+await api.jobs.update(jobId, {
+  progress: 50,
+  estimatedCompletionAt: new Date("2024-01-01T12:00:00Z")
+});
+```
+
+#### 3. Completing Jobs with Outcomes
+
+```typescript
+// Basic completion
+await api.jobs.complete(jobId, {
+  outcome: {
+    message: "Process completed successfully",
+    acknowledge: true
+  }
+});
+
+// With internal navigation
+await api.jobs.complete(jobId, {
+  outcome: {
+    message: "Process completed",
+    next: {
+      type: "id",
+      id: "space_id",
+      path: "files",
+      query: "mode=export",
+      label: "View Files"
+    }
+  }
+});
+
+// With external URL
+await api.jobs.complete(jobId, {
+  outcome: {
+    message: "Process completed",
+    next: {
+      type: "url",
+      url: "https://example.com",
+      label: "View Results"
+    }
+  }
+});
+
+// With file download
+await api.jobs.complete(jobId, {
+  outcome: {
+    message: "Files ready",
+    next: {
+      type: "download",
+      fileName: "export.csv",
+      url: "file_url",
+      label: "Download"
+    }
+  }
+});
+
+// With snapshot view
+await api.jobs.complete(jobId, {
+  outcome: {
+    message: "Snapshot created",
+    next: {
+      type: "snapshot",
+      snapshotId: "snapshot_id",
+      sheetId: "sheet_id",
+      label: "View Snapshot"
+    }
+  }
+});
+
+// With retry option
+await api.jobs.complete(jobId, {
+  outcome: {
+    message: "Process completed with warnings",
+    next: {
+      type: "retry",
+      label: "Try Again"
+    }
+  }
+});
+```
+
+### Best Practices
+
+1. **Error Handling**
+   ```typescript
+   try {
+     await processJob();
+   } catch (error) {
+     await api.jobs.fail(jobId, {
+       outcome: {
+         message: `Job failed: ${error.message}`,
+         acknowledge: true
+       }
+     });
+   }
+   ```
+
+2. **Progress Updates**
+   ```typescript
+   function updateProgress(progress: number) {
+     return api.jobs.update(jobId, {
+       progress,
+       info: `Processing: ${progress}% complete`
+     });
+   }
+   ```
+
+3. **User Feedback**
+   ```typescript
+   await api.jobs.complete(jobId, {
+     outcome: {
+       heading: "Process Complete",
+       message: "Detailed results...",
+       buttonText: "Continue",
+       acknowledge: true
+     }
+   });
+   ```
+
+4. **Resource Cleanup**
+   ```typescript
+   listener.on("job:completed", async (event) => {
+     const { jobId } = event.context;
+     await cleanupTemporaryResources(jobId);
+   });
+   ```
+
+5. **Job Monitoring**
+   ```typescript
+   listener.use(async (event, next) => {
+     if (event.topic.startsWith("job:")) {
+       console.log(`Job ${event.context.jobId}: ${event.topic}`);
+     }
+     await next();
+   });
+   ```
+
+## Listeners
+
+### Entry Point and Configuration
+
+Every Flatfile project must start with a default export function that takes a listener parameter. This is the entry point for all Flatfile configurations and event handling:
+
+```typescript
+export default function flatfileEventListener(listener) {
+  // All listener configurations go here
+}
+```
+
+This function is where you:
+1. Configure event handlers
+2. Set up workbook configurations
+3. Define space configurations
+4. Implement data transformations
+5. Handle job processing
+
+Here's a complete example showing the standard setup:
+
+```typescript
+import api from "@flatfile/api";
+
+export default function flatfileEventListener(listener) {
+  // Global event logging
+  listener.on("**", (event) => {
+    console.log(`Received event: ${event.topic}`);
+  });
+
+  // Space configuration with namespace
+  listener.namespace(["space:red"], (red) => {
+    red.on(
+      "job:ready",
+      { job: "space:configure" },
+      async ({ context: { spaceId, environmentId, jobId } }) => {
+        try {
+          // Acknowledge job start
+          await api.jobs.ack(jobId, {
+            info: "Getting started.",
+            progress: 10,
+          });
+
+          // Create workbook with sheets and actions
+          await api.workbooks.create({
+            spaceId,
+            environmentId,
+            name: "All Data",
+            labels: ["pinned"],
+            sheets: [
+              {
+                name: "Contacts",
+                slug: "contacts",
+                fields: [
+                  {
+                    key: "firstName",
+                    type: "string",
+                    label: "First Name",
+                  },
+                  {
+                    key: "lastName",
+                    type: "string",
+                    label: "Last Name",
+                  },
+                  {
+                    key: "email",
+                    type: "string",
+                    label: "Email",
+                  },
+                ],
+              },
+            ],
+            actions: [
+              {
+                operation: "submitAction",
+                mode: "foreground",
+                label: "Submit foreground",
+                description: "Submit data to webhook.site",
+                primary: true,
+              },
+            ],
+          });
+
+          // Create welcome document
+          await api.documents.create(spaceId, {
+            title: "Getting Started",
+            body: "# Welcome\n" +
+                  "### Say hello to your first customer Space in the new Flatfile!\n" +
+                  "Let's begin by first getting acquainted with what you're seeing in your Space initially.\n" +
+                  "---\n",
+          });
+
+          // Configure space theme
+          await api.spaces.update(spaceId, {
+            environmentId,
+            metadata: {
+              theme: {
+                root: {
+                  primaryColor: "red",
+                },
+                sidebar: {
+                  backgroundColor: "red",
+                  textColor: "white",
+                  activeTextColor: "midnightblue",
+                },
+              },
+            },
+          });
+
+          // Complete job
+          await api.jobs.complete(jobId, {
+            outcome: {
+              message: "Your Space was created.",
+              acknowledge: true,
+            },
+          });
+        } catch (error) {
+          console.error("Error:", error.stack);
+
+          // Handle job failure
+          await api.jobs.fail(jobId, {
+            outcome: {
+              message: "Creating a Space encountered an error. See Event Logs.",
+              acknowledge: true,
+            },
+          });
+        }
+      },
+    );
+  });
+}
+```
+
+This setup demonstrates:
+- Global event logging
+- Namespace configuration
+- Workbook creation with sheets and actions
+- Document creation
+- Space theme customization
+- Error handling and job management
+
+### Overview
+
+Listeners are the core of the Flatfile Platform, handling all configurations from data transformations to custom styling and data export. They define the functionality of your Flatfile implementation by responding to Events.
+
+### Event Structure
+
+```typescript
+interface FlatfileEvent {
+  domain: string;    // e.g., record, sheet, workbook, space
+  topic: string;     // e.g., workbook:created, sheet:updated
+  context: {
+    spaceId: string;
+    fileId?: string;
+    // Additional context
+  };
+  payload?: any;     // Optional execution details
+}
+```
+
+### Basic Listener Implementation
+
+```typescript
+export default function(listener) {
+  // Listen to all events
+  listener.on("**", (event) => {
+    console.log(`Received event: ${event.topic}`);
+  });
+
+  // Listen to specific events
+  listener.on("commit:created", async (event) => {
+    // Handle commit creation
+  });
+}
+```
+
+### Event Filtering
+
+#### Simple Filter
+```typescript
+// Using shorthand syntax
+listener.on("commit:created", { sheet: "contacts" }, async (event) => {
+  // Handle commit for contacts sheet
+});
+
+// Using filter method
+listener.filter({ sheet: "contacts" }).on("commit:created", async (event) => {
+  // Handle commit for contacts sheet
+});
+```
+
+#### Multiple Listeners Under One Filter
+```typescript
+export default function(listener) {
+  listener.filter({ sheet: "contacts" }, (configure) => {
+    configure.on("commit:created", async (event) => {
+      // Handle new commits
+    });
+
+    configure.on("commit:completed", async (event) => {
+      // Handle completed commits
+    });
+  });
+}
+```
+
+### Namespaces
+
+Namespaces help organize different workflows and target specific events:
+
+```typescript
+// Configure listeners for different namespaces
+listener.namespace(['space:green'], (listener) => {
+  listener.on("commit:created", async (event) => {
+    // Handle green space commits
+  });
+});
+
+listener.namespace(['space:red'], (listener) => {
+  listener.on("commit:created", async (event) => {
+    // Handle red space commits
+  });
+});
+```
+
+### Listener Types
+
+#### 1. Development Listener
+- Location: Developer machine
+- Use: Local development and testing
+
+#### 2. Client-side Listener
+- Location: User's browser
+- Use: Browser-specific operations
+- Example:
+```typescript
+// Access browser-specific values
+listener.on("workbook:created", async (event) => {
+  const currentUrl = window.location.href;
+  const userSession = getCurrentSession();
+  // Handle browser-specific logic
+});
+```
+
+#### 3. Agent (Server-side on Flatfile)
+- Location: Flatfile's secure cloud
+- Use: Complex operations, external integrations
+- Example:
+```typescript
+// Complex data processing
+listener.on("commit:created", async (event) => {
+  await processLargeDataset(event.payload);
+  await integrateWithExternalSystem(event.context);
+});
+```
+
+#### 4. Server-side Listener
+- Location: Your secure server
+- Use: Self-hosted operations
+- Example:
+```typescript
+// Integration with internal systems
+listener.on("workbook:created", async (event) => {
+  await yourInternalAPI.process(event);
+});
+```
+
+### Agent Management
+
+#### Deployment
+```bash
+# Deploy with default slug
+npx flatfile@latest deploy
+
+# Deploy with custom slug
+npx flatfile@latest deploy -s custom-agent-name
+```
+
+#### Conflict Prevention
+1. **Event Filtering**
+```typescript
+// Agent 1: Handles only contact-related events
+listener.filter({ sheet: "contacts" }, (configure) => {
+  // Contact-specific handlers
+});
+
+// Agent 2: Handles only order-related events
+listener.filter({ sheet: "orders" }, (configure) => {
+  // Order-specific handlers
+});
+```
+
+2. **Namespace Isolation**
+```typescript
+// Agent 1: Handles data validation
+listener.namespace(['validation'], (listener) => {
+  // Validation logic
+});
+
+// Agent 2: Handles data export
+listener.namespace(['export'], (listener) => {
+  // Export logic
+});
+```
+
+### Error Handling
+
+```typescript
+export default function(listener) {
+  listener.on("**", async (event) => {
+    try {
+      await processEvent(event);
+    } catch (error) {
+      // Handle error
+      console.error(`Error processing event: ${error.message}`);
+      
+      // Optional: Re-throw to mark as failure
+      throw error;
+    }
+  });
+}
+```
+
+### Best Practices
+
+1. **Event Handling**
+```typescript
+// Use specific event handlers
+listener.on("commit:created", async (event) => {
+  const { workbookId, sheetId } = event.context;
+  // Handle specific event
+});
+
+// Avoid wildcard handlers unless necessary
+listener.on("**", async (event) => {
+  // Generic handler
+});
+```
+
+2. **Error Management**
+```typescript
+function createErrorHandler(eventType: string) {
+  return async (error: Error) => {
+    console.error(`Error in ${eventType}:`, error);
+    await notifyAdmins(error);
+    // Additional error handling
+  };
+}
+
+listener.on("commit:created", async (event) => {
+  try {
+    await processCommit(event);
+  } catch (error) {
+    await createErrorHandler("commit:created")(error);
+  }
+});
+```
+
+3. **Performance Optimization**
+```typescript
+// Use efficient filtering
+listener.filter(
+  { sheet: "contacts", status: "valid" },
+  async (event) => {
+    // Process only valid contact records
+  }
+);
+
+// Implement debouncing for frequent events
+const debouncedHandler = debounce(async (event) => {
+  await processEvent(event);
+}, 1000);
+
+listener.on("record:updated", debouncedHandler);
+```
+
+4. **Logging and Monitoring**
+```typescript
+listener.use(async (event, next) => {
+  const startTime = Date.now();
+  
+  try {
+    await next();
+  } finally {
+    const duration = Date.now() - startTime;
+    console.log(`Event ${event.topic} processed in ${duration}ms`);
+  }
+});
+```
+
+5. **Resource Management**
+```typescript
+listener.on("workbook:created", async (event) => {
+  const resources = await allocateResources();
+  
+  try {
+    await processWorkbook(event, resources);
+  } finally {
+    await releaseResources(resources);
+  }
+});
+```
+
+## Data Hooks
+
+Data Hooks are concise functions that automatically re-format, correct, validate, and enrich data during the data import process. They operate at the record level, providing access to all fields in a row and are ideal for operations requiring multiple field access or new field creation.
+
+### Getting Started
+
+```typescript
+import { recordHook, FlatfileRecord } from "@flatfile/plugin-record-hook";
+
+// Basic record hook structure
+listener.use(
+  recordHook("sheetName", (record) => {
+    // Manipulate record here
+    return record;
+  })
+);
+```
+
+### Record Methods
+
+#### 1. compute
+
+Computes a new value for a field, running even when no value is set.
+
+```typescript
+interface ComputeMethod {
+  fieldName: string;
+  transformation: (value: any, record: FlatfileRecord) => any;
+  message?: string;
+}
+
+// Example: Generate email from first and last name
+listener.use(
+  recordHook("contacts", (record) => {
+    record.compute(
+      "email",
+      (email, record) => 
+        `${record.get("firstName")}${record.get("lastName")}@gmail.com`,
+      "Email was generated from first and last name."
+    );
+    return record;
+  })
+);
+```
+
+#### 2. computeIfPresent
+
+Similar to compute but only runs when an initial value exists.
+
+```typescript
+// Example: Convert email to lowercase
+listener.use(
+  recordHook("contacts", (record) => {
+    record.computeIfPresent(
+      "email",
+      (email) => email.toLowerCase(),
+      "Email was converted to lowercase."
+    );
+    return record;
+  })
+);
+```
+
+#### 3. validate
+
+Validates field values against specified conditions.
+
+```typescript
+interface ValidateMethod {
+  fieldName: string;
+  validator: (value: any, record: FlatfileRecord) => boolean;
+  message: string;
+}
+
+// Example: Validate last name format
+listener.use(
+  recordHook("contacts", (record) => {
+    record.validate(
+      "lastName",
+      (value) => !/\d/.test(value.toString()),
+      "Last name cannot contain numbers"
+    );
+    return record;
+  })
+);
+```
+
+### Record Messages
+
+#### 1. Information Messages
+```typescript
+// Add informational message
+record.addInfo(
+  "email", 
+  "This email was verified."
+);
+
+// Add info to multiple fields
+record.addInfo(
+  ["firstName", "lastName"],
+  "Name fields were validated."
+);
+```
+
+#### 2. Error Messages
+```typescript
+// Add error message
+const validEmailAddress = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+if (!validEmailAddress.test(email)) {
+  record.addError(
+    "email",
+    "This is not a valid email address."
+  );
+}
+```
+
+#### 3. Warning Messages
+```typescript
+// Add warning message
+if (!record.get("email")) {
+  record.addWarning(
+    "email",
+    "Without an email, we will default to name for unique id."
+  );
+}
+```
+
+### Common Use Cases
+
+#### 1. Data Transformation
+```typescript
+listener.use(
+  recordHook("orders", (record) => {
+    // Convert price to number and format
+    record.compute(
+      "price",
+      (value) => Number(value).toFixed(2),
+      "Price formatted to 2 decimal places"
+    );
+
+    // Uppercase product codes
+    record.computeIfPresent(
+      "productCode",
+      (code) => code.toUpperCase(),
+      "Product code standardized to uppercase"
+    );
+
+    return record;
+  })
+);
+```
+
+#### 2. Cross-field Validation
+```typescript
+listener.use(
+  recordHook("shipping", (record) => {
+    // Validate shipping details
+    const country = record.get("country");
+    const zipCode = record.get("zipCode");
+
+    if (country === "US" && !/^\d{5}(-\d{4})?$/.test(zipCode)) {
+      record.addError(
+        "zipCode",
+        "Invalid US ZIP code format"
+      );
+    }
+
+    return record;
+  })
+);
+```
+
+#### 3. Computed Fields
+```typescript
+listener.use(
+  recordHook("invoices", (record) => {
+    // Calculate total with tax
+    record.compute(
+      "total",
+      (_, record) => {
+        const subtotal = Number(record.get("subtotal"));
+        const taxRate = Number(record.get("taxRate"));
+        return (subtotal * (1 + taxRate)).toFixed(2);
+      },
+      "Total calculated including tax"
+    );
+
+    return record;
+  })
+);
+```
+
+### Best Practices
+
+1. **Performance**
+```typescript
+// Efficient data transformation
+listener.use(
+  recordHook("data", (record) => {
+    // Process multiple fields in one pass
+    const fields = ["field1", "field2", "field3"];
+    fields.forEach(field => {
+      record.computeIfPresent(
+        field,
+        value => value.trim(),
+        "Whitespace removed"
+      );
+    });
+    return record;
+  })
+);
+```
+
+2. **Error Handling**
+```typescript
+listener.use(
+  recordHook("data", (record) => {
+    try {
+      // Complex transformation
+      record.compute(
+        "result",
+        (value) => complexCalculation(value)
+      );
+    } catch (error) {
+      record.addError(
+        "result",
+        `Calculation failed: ${error.message}`
+      );
+    }
+    return record;
+  })
+);
+```
+
+3. **Validation Chains**
+```typescript
+listener.use(
+  recordHook("users", (record) => {
+    const email = record.get("email");
+    
+    // Chain of validations
+    if (!email) {
+      record.addWarning("email", "Email is recommended");
+    } else if (!isValidEmail(email)) {
+      record.addError("email", "Invalid email format");
+    } else if (isBlockedDomain(email)) {
+      record.addError("email", "Domain not allowed");
+    } else {
+      record.addInfo("email", "Email validated successfully");
+    }
+    
+    return record;
+  })
+);
+```
+
+4. **Modular Hooks**
+```typescript
+// Separate concerns into different hooks
+const validateAddressHook = recordHook("addresses", validateAddress);
+const formatPhoneHook = recordHook("contacts", formatPhoneNumber);
+const computeTotalsHook = recordHook("orders", computeTotals);
+
+listener.use(validateAddressHook);
+listener.use(formatPhoneHook);
+listener.use(computeTotalsHook);
+```
+
+5. **Documentation**
+```typescript
+// Document complex transformations
+listener.use(
+  recordHook("data", (record) => {
+    record.compute(
+      "complexField",
+      (value, record) => {
+        // Document the transformation logic
+        record.addInfo(
+          "complexField",
+          "Value calculated using Algorithm X with factors A, B, C"
+        );
+        return transformValue(value);
+      }
+    );
+    return record;
+  })
+);
+```
+
+## Blueprint Overview
+
+Blueprint is your guide to structuring data in Flatfile. It defines how your data should look, behave, and connect—from simple field validations to complex relationships between datasets. Think of it as a smart schema that helps you collect exactly the data you need, in exactly the format you want it.
+
+### Basic Structure
+
+```typescript
+/**
+ * @FlatfileConstraints
+ */
+export const sheetName: Flatfile.SheetConfig = {
+  name: "Sheet Name",
+  slug: "sheet-slug",
+  readonly: false,
+  allowAdditionalFields: false,
+  fields: [
+    // Field definitions go here
+  ]
+};
+```
+
+## Sheet Configuration
+
+Each sheet should be defined in its own file and follow these guidelines:
+
+### Required Properties
+
+- `name`: Human-readable name of the sheet
+- `slug`: URL-friendly identifier for the sheet
+- `fields`: Array of field configurations
+
+### Optional Properties
+
+- `readonly`: Whether the sheet is read-only (default: false)
+- `allowAdditionalFields`: Whether to allow extra fields not defined in the blueprint (default: false)
+
+## Field Types
+
+Flatfile supports various field types to handle different kinds of data:
+
+### String
+```typescript
+{
+  key: "fieldName",
+  type: "string",
+  label: "Field Label",
+  description: "Field description",
+  constraints: [
+    { type: "required" },
+    { type: "external", validator: "length", config: { max: 100 } }
+  ]
+}
+```
+
+### Number
+```typescript
+{
+  key: "price",
+  type: "number",
+  label: "Price",
+  description: "Product price",
+  config: {
+    decimal_places: 2
+  }
+}
+```
+
+### Enum
+```typescript
+{
+  key: "status",
+  type: "enum",
+  label: "Status",
+  description: "Item status",
+  config: {
+    options: [
+      { value: "active", label: "Active" },
+      { value: "inactive", label: "Inactive" }
+    ]
+  }
+}
+```
+
+### Reference
+```typescript
+{
+  key: "parentId",
+  type: "reference",
+  label: "Parent Record",
+  description: "Reference to parent record",
+  config: {
+    ref: "parent-sheet",
+    key: "id",
+    relationship: "has-one"
+  }
+}
+```
+
+### Boolean
+```typescript
+{
+  key: "isActive",
+  type: "boolean",
+  label: "Active Status",
+  description: "Whether the item is active"
+}
+```
+
+### Date
+```typescript
+{
+  key: "createdAt",
+  type: "date",
+  label: "Created Date",
+  description: "Record creation date"
+}
+```
+
+## Constraints and Validation
+
+### External Constraints Plugin
+
+Flatfile provides a powerful constraints plugin (`@flatfile/plugin-constraints`) for custom validation logic. This is the recommended way to implement custom validations.
+
+#### Installation
+```bash
+npm install @flatfile/plugin-constraints
+```
+
+#### Usage
+
+1. **In your listener file:**
+```typescript
+import { externalConstraint } from '@flatfile/plugin-constraints'
+
+listener.use(
+  externalConstraint('maxLength', (value, config) => {
+    if (value.length > config.max) {
+      return { valid: false, message: `Value must be no more than ${config.max} characters long` };
+    }
+    return { valid: true };
+  })
+)
+
+listener.use(
+  externalConstraint('minValue', (value, config) => {
+    if (value < config.min) {
+      return { valid: false, message: `Value must be at least ${config.min}` };
+    }
+    return { valid: true };
+  })
+)
+```
+
+2. **In your blueprint:**
+```typescript
+{
+  key: 'name',
+  type: 'string',
+  constraints: [
+    { type: 'external', validator: 'maxLength', config: { max: 100 } }
+  ]
+},
+{
+  key: 'age',
+  type: 'number',
+  constraints: [
+    { type: 'external', validator: 'minValue', config: { min: 0 } }
+  ]
+}
+```
+
+#### Benefits of External Constraints
+- Custom validation logic
+- Reusable validation functions
+- Access to record context
+- Flexible error handling
+- Type safety with TypeScript
+
+#### Best Practices for External Constraints
+- Keep validation functions pure and focused
+- Use descriptive error messages
+- Handle edge cases (null, undefined)
+- Consider performance for large datasets
+- Group related validations
+
+## Relationships
+
+### Reference Fields
+
+Use reference fields to create relationships between sheets:
+
+```typescript
+{
+  key: "relatedRecord",
+  type: "reference",
+  label: "Related Record",
+  description: "Reference to another record",
+  constraints: [{ type: "required" }],
+  config: {
+    ref: "related-sheet",
+    key: "uniqueField",
+    relationship: "has-one"
+  }
+}
+```
+
+### Relationship Types
+
+- `has-one`: One-to-one relationship
+- Additional relationship types may be supported in future versions
+
+## Best Practices
+
+1. **File Organization**
+   - One sheet per file
+   - Use descriptive file names
+   - Export all sheets through an index file
+
+2. **Naming Conventions**
+   - Use PascalCase for sheet names
+   - Use camelCase for field keys
+   - Use kebab-case for slugs
+
+3. **Documentation**
+   - Always include field descriptions
+   - Use JSDoc comments for sheet configurations
+   - Document any special validation rules
+
+4. **Validation**
+   - Use the external constraints plugin for custom validation
+   - Keep validation logic modular and reusable
+   - Provide clear error messages
+   - Handle edge cases appropriately
+
+5. **References**
+   - Use reference fields to maintain data relationships
+   - Ensure referenced fields are unique
+   - Document relationship requirements
+
+## Examples
+
+### Basic Sheet Configuration
+```typescript
+export const Products: Flatfile.SheetConfig = {
+  name: "Products",
+  slug: "products",
+  fields: [
+    {
+      key: "sku",
+      type: "string",
+      label: "SKU",
+      description: "Unique product identifier",
+      constraints: [
+        { type: "required" },
+        { type: "unique" },
+        { type: "external", validator: "length", config: { max: 50 } }
+      ]
+    },
+    {
+      key: "name",
+      type: "string",
+      label: "Product Name",
+      description: "Name of the product",
+      constraints: [
+        { type: "required" },
+        { type: "external", validator: "length", config: { max: 100 } }
+      ]
+    },
+    {
+      key: "price",
+      type: "number",
+      label: "Price",
+      description: "Product price",
+      config: {
+        decimal_places: 2
+      },
+      constraints: [
+        { type: "required" },
+        { type: "external", validator: "range", config: { min: 0 } }
+      ]
+    },
+    {
+      key: "status",
+      type: "enum",
+      label: "Status",
+      description: "Product status",
+      config: {
+        options: [
+          { value: "active", label: "Active" },
+          { value: "discontinued", label: "Discontinued" },
+          { value: "out_of_stock", label: "Out of Stock" }
+        ]
+      }
+    }
+  ]
+};
+```
+
+### Sheet with References and Constraints
+```typescript
+export const OrderLines: Flatfile.SheetConfig = {
+  name: "Order Lines",
+  slug: "order-lines",
+  fields: [
+    {
+      key: "orderId",
+      type: "reference",
+      label: "Order ID",
+      description: "Reference to the parent order",
+      constraints: [
+        { type: "required" },
+        { type: "external", validator: "exists", config: { sheet: "orders" } }
+      ],
+      config: {
+        ref: "orders",
+        key: "id",
+        relationship: "has-one"
+      }
+    },
+    {
+      key: "productSku",
+      type: "reference",
+      label: "Product SKU",
+      description: "Reference to the product",
+      constraints: [
+        { type: "required" },
+        { type: "external", validator: "exists", config: { sheet: "products" } }
+      ],
+      config: {
+        ref: "products",
+        key: "sku",
+        relationship: "has-one"
+      }
+    },
+    {
+      key: "quantity",
+      type: "number",
+      label: "Quantity",
+      description: "Order line quantity",
+      constraints: [
+        { type: "required" },
+        { type: "external", validator: "range", config: { min: 1 } }
+      ]
+    },
+    {
+      key: "unitPrice",
+      type: "number",
+      label: "Unit Price",
+      description: "Price per unit",
+      config: {
+        decimal_places: 2
+      },
+      constraints: [
+        { type: "required" },
+        { type: "external", validator: "range", config: { min: 0 } }
+      ]
+    }
+  ]
+};
+```
+
+### Index File
+```typescript
+import { Products } from './products';
+import { Orders } from './orders';
+import { OrderLines } from './order-lines';
+
+export {
+  Products,
+  Orders,
+  OrderLines
+};
+```
+
+## Space Configuration Plugin
+
+The `@flatfile/plugin-space-configure` plugin streamlines the setup of a new Flatfile Space. It's designed for server-side listeners and automatically configures the Space using the supplied settings.
+
+### Installation
+
+```bash
+npm install @flatfile/plugin-space-configure
+```
+
+### Usage
+
+```typescript
+import { configureSpace } from "@flatfile/plugin-space-configure";
+
+listener.use(
+  configureSpace({
+    workbooks: [  // Array of workbook configurations
+      {
+        name: "Workbook Name",
+        sheets: [
+          // Sheet configurations
+        ],
+        actions: [
+          // Action configurations
+        ],
+      },
+      // Additional workbooks...
+    ]
+  },
+  // Document creation callback
+  async (event: FlatfileEvent, workbookIds: string[], tick) => {
+    // The event object contains the space information
+    const spaceId = event.context.spaceId;
+    const createDoc = await api.documents.create(spaceId, {
+      title: "Getting Started",
+      body: "Document content here"
+    });
+  })
+);
+```
+
+### Key Features
+
+1. **Automatic Space Setup**: Configures the entire Space, including an array of workbooks, each with its own sheets and actions.
+2. **Document Creation**: Documents are created through the callback function after space configuration.
+3. **Progress Tracking**: The callback provides a tick function for progress updates.
+4. **Type Safety**: Full TypeScript support with proper event typing.
+
+### Best Practices
+
+1. Use this plugin for initial Space setup in server-side listeners.
+2. Keep workbook and sheet configurations in separate files for better organization.
+3. Store document content in TypeScript constants for better maintainability.
+4. Create documents in the callback function after space configuration.
+5. Use proper TypeScript types for the callback parameters.
+6. Consider using environment variables for dynamic configuration values.
+
+## Job Handler Plugin
+
+The `@flatfile/plugin-job-handler` plugin is designed to streamline handling Flatfile Jobs, which are large units of work performed asynchronously on resources such as files, Workbooks, or Sheets.
+
+### Installation
+
+```bash
+npm install @flatfile/plugin-job-handler
+```
+
+### Usage
+
+```typescript
+import { jobHandler } from "@flatfile/plugin-job-handler";
+
+listener.use(
+  jobHandler("domain:operation", async (event, tick) => {
+    try {
+      // Your code here...
+      await tick(50, "Halfway there!"); // update Job progress
+      // ...continue your code...
+      return {
+        outcome: {
+          message: "Job complete",
+        },
+      };
+    } catch (error) {
+      throw error; // will fail the Job
+    }
+  })
+);
+```
+
+### Key Features
+
+1. **Job Event Handling**: Listens for the `job:ready` event and filters based on the specified job parameter.
+2. **Progress Tracking**: Provides a `tick` function to update job progress and send status messages.
+3. **Error Handling**: Allows for custom error handling and job failure reporting.
+4. **Customizable Outcomes**: Enables returning custom job outcomes upon successful completion.
+
+### Best Practices
+
+1. Use descriptive job names (e.g., "workbook:export" or "sheet:validate") for better organization and debugging.
+2. Implement proper error handling to ensure jobs fail gracefully and provide useful error messages.
+3. Use the `tick` function to provide regular progress updates, especially for long-running jobs.
+4. Consider using the debug option for detailed logging during development and troubleshooting.
+5. Structure your job handler code to be modular and reusable across different job types when possible.
+
+## Flatfile API Package
+
+The `@flatfile/api` package provides convenient access to the Flatfile API from JavaScript/TypeScript. It includes all the necessary types (such as SheetConfig, etc.) and is required for interacting with the API after the initial setup.
+
+### Installation
+
+```bash
+npm install @flatfile/api
+```
+
+### Usage
+
+```typescript
+import { Flatfile } from "@flatfile/api";
+
+// Example: Creating a new workbook
+const workbook: Flatfile.SheetConfig = {
+   name: "Sheet Name",
+  slug: "sheet-slug",
+  fields: [
+    //field defintions
+  ]
+  //...other config
+};
+
+// Use the Flatfile API to create the workbook
+const createdWorkbook = await Flatfile.workbooks.create(workbook);
+```
+
+### Key Features
+
+1. **Type Definitions**: Provides TypeScript definitions for Flatfile configurations (SheetConfig, etc.).
+2. **API Access**: Allows direct interaction with the Flatfile API for operations like creating workbooks, sheets, and jobs.
+3. **Post-Setup Operations**: Essential for any API operations needed after the initial space configuration.
+
+### Best Practices
+
+1. Use `@flatfile/api` for all API interactions after the initial space setup.
+2. Leverage the provided type definitions for better type safety and autocompletion in your IDE.
+3. Combine with `@flatfile/plugin-space-configure` for a complete Flatfile integration (initial setup + subsequent API calls).
+4. Keep API calls modular and reusable where possible.
+5. Handle API errors appropriately and provide meaningful error messages.
+
+## Package Usage
+
+- Use the `@flatfile/api` package for all Flatfile-related types and configurations, including `SheetConfig`, `WorkbookConfig`, and other Flatfile-specific types.
+
+## Sheet Configuration
+
+When creating a sheet configuration, use the following structure:
+
+```typescript
+import { Flatfile } from '@flatfile/api';
+
+export const MySheet = {
+  name: 'My Sheet',
+  slug: 'my_sheet',
+  fields: [
+    {
+      key: 'fieldKey',
+      type: 'string', // or 'number', 'boolean', etc.
+      label: 'Field Label',
+      description: 'Field description',
+      constraints: [
+        { type: 'required' },
+        { type: 'external', validator: 'customValidator', config: { /* validation config */ } }
+      ],
+    },
+    // Add more fields as needed
+  ],
+};
+```
+
+## Workbook Configuration
+
+When creating a workbook configuration, use the following structure:
+
+```typescript
+import { MySheet } from './sheets/my-sheet';
+
+const workbook = {
+  name: 'My Workbook',
+  labels: ['pinned'],
+  sheets: [MySheet],
+  actions: [],
+};
+
+export default workbook;
+```
+
+## External Validations
+
+To use custom validations, you need to set up the external validations plugin:
+
+1. Install the plugin:
+   ```
+   npm install @flatfile/plugin-constraints
+   ```
+
+2. Create a `validations.ts` file in your `/hooks` directory:
+   ```typescript
+   import { externalConstraint } from '@flatfile/plugin-constraints';
+
+   export const maxLengthValidator = externalConstraint("maxLength", (value, key, { config, record }) => {
+     if (value.length > config.max) {
+       record.addError(key, `Value must be no more than ${config.max} characters long`);
+     }
+   });
+
+   export const minValueValidator = externalConstraint("minValue", (value, key, { config, record }) => {
+     const numValue = Number(value);
+     if (isNaN(numValue) || numValue < config.min) {
+       record.addError(key, `Value must be a number at least ${config.min}`);
+     } else {
+       record.set(key, numValue);
+     }
+   });
+   ```
+
+3. In your main `index.ts` file, import and use these validations:
+   ```typescript
+   import { FlatfileListener } from '@flatfile/listener';
+   import { maxLengthValidator, minValueValidator } from './hooks/validations';
+
+   export default function flatfileEventListener(listener: FlatfileListener) {
+     listener.use(maxLengthValidator);
+     listener.use(minValueValidator);
+
+     // ... rest of your listener configuration
+   }
+   ```
+
+4. Use these custom validations in your sheet configurations:
+   ```typescript
+   {
+     key: 'fieldName',
+     type: 'string',
+     constraints: [
+       { type: 'external', validator: 'maxLength', config: { max: 100 } }
+     ]
+   }
+   ```
+
+This setup allows you to define reusable validation functions and apply them across your Flatfile configuration. The validation functions can modify the record directly using methods like `addError`, `addWarning`, `addInfo`, and `set`. This provides more flexibility in handling different validation scenarios and updating the record as needed.
+
+## Running Demos
+
+To run a specific demo, use the following command:
+
+```bash
+npm run dev <demo-name>
+```
+
+For example, to run the fishbowl-inventories demo:
+
+```bash
+npm run dev fishbowl-inventories
+```
+
+### Environment Variables
+
+Before running a demo, ensure that you have the following environment variables set in your local `.env` file, which should be located in the demo directory root:
+
+- `FLATFILE_API_KEY`: Your Flatfile API key
+- `FLATFILE_ENVIRONMENT_ID`: Your Flatfile environment ID
+
+Example `.env` file:
+
+```
+FLATFILE_API_KEY=your_api_key_here
+FLATFILE_ENVIRONMENT_ID=your_environment_id_here 

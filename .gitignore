@@ -141,4 +141,3 @@ exports/*
 
 # Claude settings
 **/.claude/settings.local.json
-
