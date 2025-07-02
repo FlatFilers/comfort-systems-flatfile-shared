@@ -15,22 +15,35 @@ export function fileActionsListener(listener: FlatfileListener) {
       const { data: file } = await api.files.get(event.context.fileId);
       console.log(`📄 File detected: ${file?.name} (${file?.id})`);
 
-      // Add a custom smart import action to the file
+      // TODO: Update the import form to be able to include a dropdown
       await api.files.update(file.id, {
         actions: [
           {
-            operation: "smart-import",
+            operation: "choose-type",
             mode: "background",
             label: "CSUSA Smart Import",
-            description: "Use AI-powered mapping to import your data intelligently",
+            description:
+              "Use AI-powered mapping to import your data intelligently",
             primary: true,
+            // inputForm: {
+            //   fields: [
+            //     {
+            //       key: "type",
+            //       label: "Type",
+            //       type: "enum",
+            //       options: ["default", "extras", "walker", "prevailing-wage"],
+            //     },
+            //   ],
+            // },
           },
         ],
       });
 
-      console.log(`✅ Added "CSUSA Smart Import" action to file: ${file?.name}`);
+      console.log(
+        `✅ Added "CSUSA Smart Import" action to file: ${file?.name}`
+      );
     } catch (error) {
       console.error("❌ Error processing file:created event:", error);
     }
   });
-} 
+}

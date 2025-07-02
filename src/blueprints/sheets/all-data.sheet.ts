@@ -2,11 +2,11 @@ import { Flatfile } from "@flatfile/api";
 
 /**
  * All Data Sheet - Master sheet containing all columns from payroll CSV files
- * 
+ *
  * This sheet serves as the consolidated source for payroll and benefits data,
  * containing all data from imported CSV files including employee information,
  * benefit contributions, loan payments, and prevailing wage amounts.
- * 
+ *
  * Field groups:
  * - Employee Data: Personal information and identifiers
  * - Payroll Data: Dates and processing information
@@ -21,40 +21,45 @@ export const allDataSheet: Flatfile.SheetConfig = {
   fields: [
     // ===== Employee Identification Fields =====
     {
+      key: "location",
+      label: "Location Name or Code",
+      type: "string",
+    },
+    {
       key: "planNumber",
       type: "string",
       label: "Plan Number",
-      description: "Benefit plan identifier"
+      description: "Benefit plan identifier",
     },
     {
       key: "employeeSsn",
       type: "string",
       label: "Employee SSN",
-      description: "Employee Social Security Number"
+      description: "Employee Social Security Number",
     },
     {
       key: "subset",
       type: "string",
       label: "Subset",
-      description: "Employee subset grouping for payroll processing"
+      description: "Employee subset grouping for payroll processing",
     },
     {
       key: "lastName",
       type: "string",
       label: "Last Name",
-      description: "Employee last name"
+      description: "Employee last name",
     },
     {
       key: "firstName",
       type: "string",
       label: "First Name",
-      description: "Employee first name"
+      description: "Employee first name",
     },
     {
       key: "middleName",
       type: "string",
       label: "Middle Name",
-      description: "Employee middle name"
+      description: "Employee middle name",
     },
 
     // ===== Payroll Data Fields =====
@@ -62,7 +67,7 @@ export const allDataSheet: Flatfile.SheetConfig = {
       key: "payrollDate",
       type: "date",
       label: "Payroll Date",
-      description: "Date of payroll processing"
+      description: "Date of payroll processing",
     },
 
     // ===== Benefit Contribution Fields =====
@@ -72,8 +77,8 @@ export const allDataSheet: Flatfile.SheetConfig = {
       label: "BTK 1",
       description: "BTK contribution amount 1",
       config: {
-        decimalPlaces: 2
-      }
+        decimalPlaces: 2,
+      },
     },
     {
       key: "btk2",
@@ -81,8 +86,8 @@ export const allDataSheet: Flatfile.SheetConfig = {
       label: "BTK 2",
       description: "BTK contribution amount 2",
       config: {
-        decimalPlaces: 2
-      }
+        decimalPlaces: 2,
+      },
     },
     {
       key: "erm3",
@@ -90,8 +95,8 @@ export const allDataSheet: Flatfile.SheetConfig = {
       label: "ERM 3",
       description: "ERM contribution amount 3",
       config: {
-        decimalPlaces: 2
-      }
+        decimalPlaces: 2,
+      },
     },
     {
       key: "erm4",
@@ -99,8 +104,8 @@ export const allDataSheet: Flatfile.SheetConfig = {
       label: "ERM 4",
       description: "ERM contribution amount 4",
       config: {
-        decimalPlaces: 2
-      }
+        decimalPlaces: 2,
+      },
     },
     {
       key: "erm6",
@@ -108,8 +113,8 @@ export const allDataSheet: Flatfile.SheetConfig = {
       label: "ERM 6",
       description: "ERM contribution amount 6",
       config: {
-        decimalPlaces: 2
-      }
+        decimalPlaces: 2,
+      },
     },
 
     // ===== Loan Payment Fields =====
@@ -119,8 +124,8 @@ export const allDataSheet: Flatfile.SheetConfig = {
       label: "LO1 (Loan Payment)",
       description: "LO1 loan payment amount",
       config: {
-        decimalPlaces: 2
-      }
+        decimalPlaces: 2,
+      },
     },
 
     // ===== Retirement/Health Contribution Fields =====
@@ -130,8 +135,8 @@ export const allDataSheet: Flatfile.SheetConfig = {
       label: "RTH5",
       description: "RTH contribution amount 5",
       config: {
-        decimalPlaces: 2
-      }
+        decimalPlaces: 2,
+      },
     },
     {
       key: "rth6",
@@ -139,8 +144,8 @@ export const allDataSheet: Flatfile.SheetConfig = {
       label: "RTH6",
       description: "RTH contribution amount 6",
       config: {
-        decimalPlaces: 2
-      }
+        decimalPlaces: 2,
+      },
     },
 
     // ===== Prevailing Wage Fields =====
@@ -150,9 +155,9 @@ export const allDataSheet: Flatfile.SheetConfig = {
       label: "PW - AMOUNT 1",
       description: "Prevailing wage amount 1 for qualifying projects",
       config: {
-        decimalPlaces: 2
-      }
-    }
+        decimalPlaces: 2,
+      },
+    },
   ],
-  allowAdditionalFields: true
-}; 
+  allowAdditionalFields: true,
+};
