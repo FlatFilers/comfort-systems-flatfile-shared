@@ -15,27 +15,30 @@ export default function (listener: FlatfileListener) {
   // Globally installed plugins
   listener.use(ExcelExtractor({ rawNumbers: true }));
 
-  listener.use(spaceConfig);
-  listener.use(submitListener);
-  listener.use(allDataHook);
-  //listener.use(fileActionsListener);
-  //listener.use(smartImportListener);
-  listener.on("**", (event) => {
-    console.log(`Received event: ${(JSON.stringify(event), null, 2)}`);
+  // Namespace filter for subsidiary-benefits
+  listener.namespace(["subsidiary-benefits"], (subsidiaryListener) => {
+    subsidiaryListener.use(spaceConfig);
+    subsidiaryListener.use(submitListener);
+    subsidiaryListener.use(allDataHook);
+    //subsidiaryListener.use(fileActionsListener);
+    //subsidiaryListener.use(smartImportListener);
+    subsidiaryListener.on("**", (event) => {
+      console.log(`Received event: ${(JSON.stringify(event), null, 2)}`);
+    });
+    subsidiaryListener.use(
+      automap({
+        accuracy: "exact",
+        defaultTargetSheet: "all-data",
+        matchFilename: /.*/,
+      })
+    );
+    subsidiaryListener.use(federateListener);
+    subsidiaryListener.use(
+      exportDelimitedZip({
+        job: "submit",
+        delimiter: ",",
+        fileExtension: "csv",
+      })
+    );
   });
-  listener.use(
-    automap({
-      accuracy: "exact",
-      defaultTargetSheet: "all-data",
-      matchFilename: /.*/,
-    })
-  );
-  listener.use(federateListener);
-  listener.use(
-    exportDelimitedZip({
-      job: "submit",
-      delimiter: ",",
-      fileExtension: "csv",
-    })
-  );
 }
