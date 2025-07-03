@@ -18,7 +18,7 @@
     "@aws-sdk/client-sts": "^3.723.0",
     "@aws-sdk/lib-storage": "^3.723.0",
     "@azure/ai-form-recognizer": "^5.1.0",
-    "@flatfile/api": "^1.17.4",
+    "@flatfile/api": "^1.17.5",
     "@flatfile/configure": "^1.1.0",
     "@flatfile/http-logger": "^1.0.3",
     "@flatfile/listener": "^1.1.1",
