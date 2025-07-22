@@ -70,7 +70,7 @@
     "event-source-plus": "^0.1.7",
     "extendable-error": "^0.1.7",
     "flatfile": "^3.5.9",
-    "form-data": "^4.0.1",
+    "form-data": "^4.0.4",
     "fs": "^0.0.1-security",
     "google-libphonenumber": "^3.2.38",
     "googleapis": "^144.0.0",
