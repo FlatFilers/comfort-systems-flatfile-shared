@@ -53,7 +53,7 @@
     "anthropic-ai": "^0.0.10",
     "async": "^3.2.5",
     "aws-sdk": "^2.1692.0",
-    "axios": "^1.7.5",
+    "axios": "^1.12.1",
     "better-sse": "^0.14.0",
     "chrono": "^1.0.5",
     "chrono-node": "^2.7.8",
